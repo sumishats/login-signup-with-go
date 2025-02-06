@@ -6,197 +6,190 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 var tpl *template.Template
 var userData = make(map[string]User)
 
-type PageData struct {
-	EmailInvalid string
-	PassInvalid  string
-}
+// ✅ Session Store
+var sessionStore = make(map[string]string) // sessionID -> email
+
 type User struct {
 	Name     string
 	Email    string
 	Password string
 }
 
-var RandumNumber = rand.Intn(200)
-
 func main() {
-
 	tpl, _ = template.ParseGlob("template/*.html")
 
-	//epozhano route verunne athil ullil ulla func wrk avanum aa funcil must ayi response request parameter venam
-	http.HandleFunc("/signup", handlefuncSignup)
-	http.HandleFunc("/signuppost", signupmethod)
-	http.HandleFunc("/login", loginfunc)
-	http.HandleFunc("/loginpost", loginmethod)
-	http.HandleFunc("/home", homefunc)
-	http.HandleFunc("/logout", logoutfunc)
-	http.HandleFunc("/", indexHandle)
-	http.HandleFunc("/clear", clearUser)
+	// Create a new ServeMux (router)
+	mux := http.NewServeMux()
 
-	http.ListenAndServe(":8080", nil)
+	// Define routes
+	mux.HandleFunc("/signup", handlefuncSignup)
+	mux.HandleFunc("/signuppost", signupmethod)
+	mux.HandleFunc("/login", loginfunc)
+	mux.HandleFunc("/loginpost", loginmethod)
+	mux.HandleFunc("/logout", logoutfunc)
+	mux.HandleFunc("/clear", clearUser)
+	mux.HandleFunc("/", indexHandle)
+	mux.HandleFunc("/home", homefunc)
 
+	// Wrap the entire router with authentication middleware
+	fmt.Println("Starting server on :8080...")
+	http.ListenAndServe(":8080", authMiddleware(mux))
 }
 
-func clearUser(w http.ResponseWriter, r *http.Request) {
+// ✅ Middleware for Authentication
+func authMiddleware(next http.Handler) http.Handler {
+	fmt.Println("iam middleware")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("🚀 Middleware executed for:", r.URL.Path)
 
-	userData = make(map[string]User)
+		// Define public routes (allowed without login)
+		publicRoutes := map[string]bool{
+			"/signup":     true,
+			"/signuppost": true,
+			"/login":      true,
+			"/loginpost":  true,
+		}
 
-	tpl.ExecuteTemplate(w, "signup.html", nil)
-	fmt.Println(userData)
+		// Allow public routes without authentication
+		if _, isPublic := publicRoutes[r.URL.Path]; isPublic {
+			fmt.Println("✅ Public route allowed:", r.URL.Path)
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Check for authentication session
+		cookie, err := r.Cookie("sessionID")
+		if err != nil || sessionStore[cookie.Value] == "" {
+			fmt.Println("❌ Unauthorized access! Redirecting to /login")
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		fmt.Println("✅ User authenticated! Access granted to:", r.URL.Path)
+		next.ServeHTTP(w, r) // Continue to the requested handler
+	})
 }
 
+// ✅ Home Page (Requires Authentication)
 func homefunc(w http.ResponseWriter, r *http.Request) {
-
-	cookie, err := r.Cookie("logincookie")
-	if err != nil || cookie.Value == "" {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
-
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, post-check=0, pre-check=0")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	tpl.ExecuteTemplate(w, "index.html", nil)
-
 }
+
+// ✅ Index Handler (Redirects to Home)
 func indexHandle(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("logincookie")
-	if err != nil || cookie.Value == "" {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
+	fmt.Println("🏠 Redirecting to home...")
 	http.Redirect(w, r, "/home", http.StatusSeeOther)
-
 }
 
+// ✅ Signup Page (Public Route)
 func handlefuncSignup(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("entered the singup ")
-
-	cookie, err := r.Cookie("logincookie")
-	if err == nil && cookie.Value != "" {
-		// Optionally redirect or display message for logged-in users
-		http.Redirect(w, r, "/home", http.StatusSeeOther)
-		return
-	}
-
-	err = tpl.ExecuteTemplate(w, "signup.html", nil)
+	fmt.Println("📝 Signup page accessed")
+	err := tpl.ExecuteTemplate(w, "signup.html", nil)
 	if err != nil {
-		http.Error(w, "Signup page is not found: "+err.Error(), http.StatusInternalServerError)
-		return
+		http.Error(w, "Signup page not found: "+err.Error(), http.StatusInternalServerError)
 	}
 }
+
+// ✅ Signup Processing (Public Route)
 func signupmethod(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("🔑 Signup process started")
 
 	name := r.FormValue("name")
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 
-	if email == "" {
-		tpl.ExecuteTemplate(w, "signup.html", "Email is nil")
-		return
-	}
-	if password == "" {
-		tpl.ExecuteTemplate(w, "signup.html", "Password is nil")
-		return
-	}
-	if name == "" {
-		tpl.ExecuteTemplate(w, "signup.html", "Name is nil")
+	if name == "" || email == "" || password == "" {
+		tpl.ExecuteTemplate(w, "signup.html", "All fields are required")
 		return
 	}
 
-	if _, ok := userData[email]; ok {
-		tpl.ExecuteTemplate(w, "signup.html", "User already found")
+	if _, exists := userData[email]; exists {
+		tpl.ExecuteTemplate(w, "signup.html", "User already exists")
 		return
 	}
 
 	userData[email] = User{Name: name, Email: email, Password: password}
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
-
 }
 
+// ✅ Login Page (Public Route)
 func loginfunc(w http.ResponseWriter, r *http.Request) {
-
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, post-check=0, pre-check=0")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
-	cookie, err := r.Cookie("logincookie")
-	if err == nil && cookie.Value == strconv.Itoa(RandumNumber) {
-		http.Redirect(w, r, "/home", http.StatusSeeOther)
-		return
-	}
+	fmt.Println("🔓 Login page accessed")
 	tpl.ExecuteTemplate(w, "login.html", nil)
 }
-func loginmethod(w http.ResponseWriter, r *http.Request) {
 
-	cookie, err := r.Cookie("logincookie")
-	if err != nil {
-		fmt.Println(err)
-	} else if cookie.Value != "" {
-		http.Redirect(w, r, "loginpost", http.StatusSeeOther)
-		return
-	}
+// ✅ Login Processing (Public Route)
+func loginmethod(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("🔑 Login process started")
+
 	email := r.FormValue("emailLogin")
 	password := r.FormValue("passwordLogin")
 
-	user, ok := userData[email]
+	user, exists := userData[email]
 
-	if email == "" {
-		n := PageData{EmailInvalid: "email not found"}
-		tpl.ExecuteTemplate(w, "login.html", n)
-		fmt.Println("email is empty")
-		return
-	} else if password == "" {
-		n := PageData{PassInvalid: "password not found"}
-		tpl.ExecuteTemplate(w, "login.html", n)
+	if email == "" || password == "" {
+		tpl.ExecuteTemplate(w, "login.html", "Both fields are required")
 		return
 	}
 
-	if ok && password != user.Password {
-		n := PageData{PassInvalid: "Invalid Credentials"}
-		tpl.ExecuteTemplate(w, "login.html", n)
+	if !exists || user.Password != password {
+		tpl.ExecuteTemplate(w, "login.html", "Invalid credentials")
 		return
 	}
 
-	if ok && password == user.Password {
-		fmt.Println("reached cookie creatiion")
-		CookirForLogin := &http.Cookie{}
-		CookirForLogin.Name = "logincookie"
-		CookirForLogin.Value = strconv.Itoa(RandumNumber)
-		CookirForLogin.MaxAge = 300
-		CookirForLogin.Path = "/"
-		http.SetCookie(w, CookirForLogin)
-		tpl.ExecuteTemplate(w, "index.html", CookirForLogin.Value)
+	// ✅ Generate a unique session ID
+	sessionID := strconv.Itoa(rand.Intn(1000000)) + strconv.FormatInt(time.Now().Unix(), 10)
+	sessionStore[sessionID] = email // Store session in session map
 
-	} else {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
+	// ✅ Set Authentication Cookie
+	sessionCookie := &http.Cookie{
+		Name:   "sessionID",
+		Value:  sessionID,
+		MaxAge: 300, // 5 minutes
+		Path:   "/",
 	}
+	http.SetCookie(w, sessionCookie)
+	fmt.Println("✅ Login successful, session created!")
+
+	http.Redirect(w, r, "/home", http.StatusSeeOther)
 }
 
+// ✅ Logout Function (Destroys Cookie and Session)
 func logoutfunc(w http.ResponseWriter, r *http.Request) {
-	cookielogout := http.Cookie{}
-	cookielogout.Name = "logincookie"
-	cookielogout.Value = ""
-	cookielogout.MaxAge = -1
-	cookielogout.Path = "/"
-	http.SetCookie(w, &cookielogout)
+	fmt.Println("🚪 Logging out...")
 
-	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, post-check=0, pre-check=0")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
+	// Get session ID from cookie
+	cookie, err := r.Cookie("sessionID")
+	if err == nil {
+		delete(sessionStore, cookie.Value) // Remove session from store
+	}
+
+	// Expire the authentication cookie
+	expiredCookie := &http.Cookie{
+		Name:   "sessionID",
+		Value:  "",
+		MaxAge: -1, // Expire the cookie immediately
+		Path:   "/",
+	}
+	http.SetCookie(w, expiredCookie)
+	fmt.Println("✅ Logout successful!")
 
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
 
-	cookie, err := r.Cookie("logincookie")
-	if err != nil {
-		fmt.Println(err)
-
-	} else if cookie.Value == "" {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
+// ✅ Clears all user data (For Testing)
+func clearUser(w http.ResponseWriter, r *http.Request) {
+	userData = make(map[string]User)
+	sessionStore = make(map[string]string) // Clear all sessions
+	tpl.ExecuteTemplate(w, "signup.html", nil)
+	fmt.Println("🔄 All user data and sessions cleared!")
 }

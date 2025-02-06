@@ -63,11 +63,18 @@
 
 
     </div>
-    <script>
+    <!-- <script>
       if (document.cookie.indexOf('logincookie=') >= 0) {
         window.location.replace('/home'); // replace the current history entry
     }
-      </script>
+      </script> -->
+      <script>
+        window.addEventListener("pageshow", function(event) {
+       if (event.persisted) {
+           location.reload();
+       }
+   });
+       </script>
       
 </body>
 </html>
