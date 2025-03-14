@@ -1,44 +1,30 @@
-Login & Signup with Go
-This project is a basic authentication system built using Go, featuring:
+# Login Signup with Go
 
-HTTP handling for login and signup routes
-View engine for rendering frontend pages
-Cookies & Sessions for user authentication
-Middleware for access control
-Features
-✅ User Signup & Login
-✅ Session-based Authentication
-✅ Secure Cookies for User Tracking
-✅ Middleware for Protected Routes
+This is a simple login and signup system built using **Go**, **HTTP**, **view engine**, **cookies**, **sessions**, and **middleware**. It allows users to register, log in, and manage sessions for authentication.
 
-Installation & Setup
-Clone the Repository
+## Features
 
-sh
-Copy
-Edit
-git clone https://github.com/your-username/login-signup-with-go.git
-cd login-signup-with-go
-Install Dependencies
+- User signup and registration with email and password
+- User login with session management
+- Password hashing for secure storage
+- Middleware for authentication
+- Session management using cookies
+- View engine for rendering HTML templates
 
-sh
-Copy
-Edit
-go mod tidy
-Run the Server
+## Technologies Used
 
-sh
-Copy
-Edit
-go run main.go
-Access in Browser
+- **Go** – Programming language
+- **HTML/CSS** – For frontend UI
+- **Gorilla Sessions** – Session management in Go
+- **HTML Template/Go Template** – View rendering engine
+- **bcrypt** – Password hashing for secure storage
+- **HTTP** – HTTP server for requests
 
-arduino
-Copy
-Edit
-http://localhost:8080
-Usage
-Signup: Create an account
-Login: Authenticate with credentials
-Protected Routes: Access pages after login
-Logout: Destroy session
+## Installation
+
+Follow these steps to get your development environment set up:
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/your-username/login-signup-with-go.git
+   cd login-signup-with-go
